@@ -470,6 +470,7 @@ app.get('/api/stream', async (req, res) => {
   );
 
   if (!isDirectCdn && directCdnUrl && (directCdnUrl.startsWith('http://') || directCdnUrl.startsWith('https://'))) {
+    try {
       const formatFlag = format === 'mp3' 
         ? 'ba/bestaudio/best' 
         : 'best[ext=mp4][acodec!=none][vcodec!=none]/22/18/best[acodec!=none]/b/best';
