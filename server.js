@@ -296,15 +296,14 @@ async function analyzeMedia(url) {
     let bestAudioUrl = d.url || url;
 
     if (d.formats && Array.isArray(d.formats)) {
-      const progressiveVideo = d.formats.filter(f => f.url && f.vcodec !== 'none' && f.acodec !== 'none').pop();
-      if (progressiveVideo) {
-        bestVideoUrl = progressiveVideo.url;
-      } else {
-        const anyVideo = d.formats.filter(f => f.url && f.vcodec !== 'none').pop();
-        if (anyVideo) bestVideoUrl = anyVideo.url;
+      const progressiveWithAudio = d.formats.filter(f => f.url && f.vcodec !== 'none' && f.acodec !== 'none' && f.acodec !== null);
+      if (progressiveWithAudio.length > 0) {
+        bestVideoUrl = progressiveWithAudio[progressiveWithAudio.length - 1].url;
+      } else if (d.url) {
+        bestVideoUrl = d.url;
       }
 
-      const bestAudio = d.formats.filter(f => f.url && f.acodec !== 'none').pop();
+      const bestAudio = d.formats.filter(f => f.url && f.acodec !== 'none' && f.acodec !== null).pop();
       if (bestAudio) bestAudioUrl = bestAudio.url;
     }
 
@@ -471,8 +470,9 @@ app.get('/api/stream', async (req, res) => {
   );
 
   if (!isDirectCdn && directCdnUrl && (directCdnUrl.startsWith('http://') || directCdnUrl.startsWith('https://'))) {
-    try {
-      const formatFlag = format === 'mp3' ? 'ba/bestaudio/best' : '18/22/best[height<=1080]/best';
+      const formatFlag = format === 'mp3' 
+        ? 'ba/bestaudio/best' 
+        : 'best[ext=mp4][acodec!=none][vcodec!=none]/22/18/best[acodec!=none]/b/best';
       const extractedUrl = await runYtDlp([
         '--no-playlist',
         '--geo-bypass',
