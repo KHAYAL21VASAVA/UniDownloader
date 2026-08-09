@@ -62,58 +62,14 @@ document.addEventListener('DOMContentLoaded', () => {
   renderHistory();
   registerServiceWorker();
 
-  // Server Configuration & Modal
-  const serverSettingsBtn = document.getElementById('server-settings-btn');
-  const serverModal = document.getElementById('server-modal');
-  const modalCloseBtn = document.getElementById('modal-close-btn');
-  const serverUrlInput = document.getElementById('server-url-input');
-  const btnSaveServer = document.getElementById('btn-save-server');
-  const btnResetServer = document.getElementById('btn-reset-server');
-  const serverStatusPill = document.getElementById('server-status-pill');
-
   function getApiBaseUrl() {
-    const custom = localStorage.getItem('unidownloader_server_url');
-    if (custom && custom.trim().startsWith('http')) {
-      return custom.trim().replace(/\/$/, '');
-    }
     // If inside Capacitor Android App
     if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) {
       return 'http://10.0.2.2:3000';
     }
-    return '';
+    // If running on localhost or deployed web server (Render, Railway, etc.), use same-origin
+    return window.location.origin.includes('github.io') ? '' : window.location.origin;
   }
-
-  // Server Modal Events
-  serverSettingsBtn.addEventListener('click', () => {
-    serverUrlInput.value = localStorage.getItem('unidownloader_server_url') || getApiBaseUrl() || window.location.origin;
-    serverModal.classList.remove('hidden');
-  });
-
-  modalCloseBtn.addEventListener('click', () => {
-    serverModal.classList.add('hidden');
-  });
-
-  serverModal.addEventListener('click', (e) => {
-    if (e.target === serverModal) serverModal.classList.add('hidden');
-  });
-
-  btnSaveServer.addEventListener('click', () => {
-    const val = serverUrlInput.value.trim();
-    if (val.startsWith('http://') || val.startsWith('https://')) {
-      localStorage.setItem('unidownloader_server_url', val.replace(/\/$/, ''));
-      showToast(`Server connected to: ${val}`);
-      serverModal.classList.add('hidden');
-    } else {
-      showError('Please enter a valid URL starting with http:// or https://');
-    }
-  });
-
-  btnResetServer.addEventListener('click', () => {
-    localStorage.removeItem('unidownloader_server_url');
-    serverUrlInput.value = window.location.origin;
-    showToast('Reset server to default');
-    serverModal.classList.add('hidden');
-  });
 
   // -------------------------------------------------------------
   // Clipboard & Input Events

@@ -44,10 +44,6 @@
           <i class="fa-solid fa-code"></i>
           <span>Vibe coded by <strong>Khayal & Antigravity</strong></span>
         </div>
-        <button id="server-settings-btn" class="btn-server" title="Backend Server Connection">
-          <i class="fa-solid fa-server"></i>
-          <span id="server-status-pill" class="server-status-dot"></span>
-        </button>
         <button id="pwa-install-btn" class="btn-pwa" title="Install App on Device">
           <i class="fa-solid fa-mobile-screen-button"></i>
           <span>Install App</span>
@@ -381,32 +377,7 @@
     </div>
   </footer>
 
-  <!-- Server Configuration Modal for Android / Local Network -->
-  <div id="server-modal" class="modal-backdrop hidden">
-    <div class="modal-card">
-      <div class="modal-header">
-        <div class="modal-title-group">
-          <i class="fa-solid fa-server modal-icon"></i>
-          <h3>Backend Server Connection</h3>
-        </div>
-        <button id="modal-close-btn" class="modal-close"><i class="fa-solid fa-xmark"></i></button>
-      </div>
 
-      <p class="modal-desc">
-        When running as an Android APK, connect to your PC's IP address (e.g. <code>http://192.168.1.5:3000</code>) or cloud server.
-      </p>
-
-      <div class="modal-input-group">
-        <label for="server-url-input">Server API URL</label>
-        <input type="text" id="server-url-input" class="modal-input" placeholder="http://192.168.1.X:3000" />
-      </div>
-
-      <div class="modal-actions">
-        <button id="btn-save-server" class="btn-action-primary">Save & Connect</button>
-        <button id="btn-reset-server" class="btn-action-outline">Reset to Default</button>
-      </div>
-    </div>
-  </div>
 
   <!-- Toast Notification -->
   <div id="toast" class="toast hidden">

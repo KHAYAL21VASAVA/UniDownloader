@@ -278,7 +278,14 @@ async function analyzeMedia(url) {
 
   // 1. Try Native Engine via yt-dlp JSON Dump
   try {
-    const rawJson = await runYtDlp(['--no-playlist', '--dump-json', url]);
+    const rawJson = await runYtDlp([
+      '--no-playlist',
+      '--geo-bypass',
+      '--no-check-certificates',
+      '--extractor-args', 'youtube:player_client=android,web',
+      '--dump-json',
+      url
+    ]);
     const d = JSON.parse(rawJson);
     const title = sanitizeFileName(d.title || `${platform}_Media`);
     const uploader = d.uploader || d.channel || d.creator || `${platform} Creator`;
@@ -466,7 +473,14 @@ app.get('/api/stream', async (req, res) => {
   if (!isDirectCdn && directCdnUrl && (directCdnUrl.startsWith('http://') || directCdnUrl.startsWith('https://'))) {
     try {
       const formatFlag = format === 'mp3' ? 'ba/bestaudio/best' : '18/22/best[height<=1080]/best';
-      const extractedUrl = await runYtDlp(['-f', formatFlag, '-g', directCdnUrl]);
+      const extractedUrl = await runYtDlp([
+        '--no-playlist',
+        '--geo-bypass',
+        '--no-check-certificates',
+        '--extractor-args', 'youtube:player_client=android,web',
+        '-f', formatFlag,
+        '-g', directCdnUrl
+      ]);
       if (extractedUrl && extractedUrl.startsWith('http')) {
         directCdnUrl = extractedUrl.split('\n')[0].trim();
       }
