@@ -1,0 +1,34 @@
+{
+  "name": "unidownloader-saas",
+  "version": "1.0.0",
+  "description": "Universal High-Speed Media Downloader SaaS & Android App",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "build": "node -e \"console.log('Web assets verified in public/')\"",
+    "cap:sync": "cap sync",
+    "cap:open": "cap open android",
+    "cap:build": "cap sync android"
+  },
+  "keywords": [
+    "downloader",
+    "media",
+    "youtube",
+    "instagram",
+    "tiktok",
+    "pwa",
+    "capacitor",
+    "android"
+  ],
+  "author": "Khayal and Antigravity",
+  "license": "MIT",
+  "dependencies": {
+    "@capacitor/android": "^7.0.1",
+    "@capacitor/cli": "^7.0.1",
+    "@capacitor/core": "^7.0.1",
+    "@distube/ytdl-core": "^4.16.12",
+    "axios": "^1.7.9",
+    "cors": "^2.8.5",
+    "express": "^4.21.2"
+  }
+}

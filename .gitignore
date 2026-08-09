@@ -1,0 +1,30 @@
+# Node dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Standalone local binaries
+bin/
+*.exe
+
+# Android & Gradle Build Artifacts
+.gradle/
+build/
+app/build/
+android/.gradle/
+android/app/build/
+android/build/
+android/local.properties
+local.properties
+*.apk
+*.aab
+
+# IDE & OS files
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+*.log
+*-player-script.js

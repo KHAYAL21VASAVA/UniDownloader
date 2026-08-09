@@ -1,0 +1,12 @@
+<resources>
+    <string name="app_name">UniDownloader</string>
+    <string name="app_subtitle">Vibe coded by Khayal and Antigravity</string>
+    <string name="app_author_tag">Vibe coded by Khayal and Antigravity</string>
+    <string name="paste_hint">Paste video URL here...</string>
+    <string name="analyze_button">Analyze Link</string>
+    <string name="download_button">Download</string>
+    <string name="nav_home">Home</string>
+    <string name="nav_active">Active</string>
+    <string name="nav_downloads">Downloads</string>
+    <string name="nav_settings">Settings</string>
+</resources>

@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UniDownloader — Universal High-Speed Media Downloader</title>
+  <meta name="description" content="Download YouTube, Instagram Reels, TikTok without watermark, Twitter/X, and Facebook videos in Full HD and 320kbps MP3 audio. Vibe coded by Khayal and Antigravity.">
+  <meta name="theme-color" content="#0B0E14">
+
+  <!-- PWA Manifest -->
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
+
+  <!-- Fonts & Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
+
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+
+  <!-- Ambient Glow Gradients -->
+  <div class="ambient-glow glow-1"></div>
+  <div class="ambient-glow glow-2"></div>
+
+  <!-- Navbar -->
+  <header class="navbar-wrapper">
+    <nav class="navbar container">
+      <div class="logo-group">
+        <div class="logo-icon">
+          <i class="fa-solid fa-cloud-arrow-down"></i>
+        </div>
+        <div class="logo-text-col">
+          <span class="logo-title">UniDownloader</span>
+          <span class="logo-tag">SaaS Web Edition</span>
+        </div>
+      </div>
+
+      <div class="nav-badges">
+        <div class="vibe-badge">
+          <i class="fa-solid fa-code"></i>
+          <span>Vibe coded by <strong>Khayal & Antigravity</strong></span>
+        </div>
+        <button id="server-settings-btn" class="btn-server" title="Backend Server Connection">
+          <i class="fa-solid fa-server"></i>
+          <span id="server-status-pill" class="server-status-dot"></span>
+        </button>
+        <button id="pwa-install-btn" class="btn-pwa" title="Install App on Device">
+          <i class="fa-solid fa-mobile-screen-button"></i>
+          <span>Install App</span>
+        </button>
+      </div>
+    </nav>
+  </header>
+
+  <!-- Main Hero Section -->
+  <main class="main-content container">
+
+    <section class="hero-section">
+      <div class="hero-chip">
+        <span class="pulse-dot"></span>
+        <span>Ultra-Fast Universal Downloader • Zero Install • 100% Free</span>
+      </div>
+
+      <h1 class="hero-heading">
+        Download Any Video & Audio<br>
+        <span class="gradient-text">In Full HD & 320kbps MP3</span>
+      </h1>
+
+      <p class="hero-subtext">
+        Universal extractor for YouTube, Instagram Reels, TikTok without watermarks, Twitter/X, Facebook, and SoundCloud with instant high-speed streaming.
+      </p>
+
+      <!-- URL Input Card -->
+      <div class="search-card">
+        <div class="search-input-wrapper">
+          <i class="fa-solid fa-link search-icon"></i>
+          <input 
+            type="url" 
+            id="url-input" 
+            placeholder="Paste YouTube, Instagram Reel, TikTok, or video URL..." 
+            autocomplete="off" 
+            spellcheck="false"
+          >
+          <div class="input-actions">
+            <button id="paste-btn" class="btn-icon" title="Paste from clipboard">
+              <i class="fa-regular fa-clipboard"></i>
+              <span>Paste</span>
+            </button>
+            <button id="clear-btn" class="btn-icon hidden" title="Clear input">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+        </div>
+
+        <button id="analyze-btn" class="btn-primary">
+          <span class="btn-text">
+            <i class="fa-solid fa-bolt"></i>
+            <span>ANALYZE LINK</span>
+          </span>
+          <span class="btn-loader hidden">
+            <i class="fa-solid fa-circle-notch fa-spin"></i>
+            <span>Analyzing Streams...</span>
+          </span>
+        </button>
+      </div>
+
+      <!-- Platform Pills -->
+      <div class="platform-pills">
+        <span class="pill"><i class="fa-brands fa-youtube"></i> YouTube</span>
+        <span class="pill"><i class="fa-brands fa-instagram"></i> Instagram Reels</span>
+        <span class="pill"><i class="fa-brands fa-tiktok"></i> TikTok No Watermark</span>
+        <span class="pill"><i class="fa-brands fa-x-twitter"></i> Twitter / X</span>
+        <span class="pill"><i class="fa-brands fa-facebook"></i> Facebook</span>
+        <span class="pill"><i class="fa-brands fa-reddit-alien"></i> Reddit</span>
+        <span class="pill"><i class="fa-brands fa-soundcloud"></i> SoundCloud</span>
+      </div>
+    </section>
+
+    <!-- Error Alert Banner -->
+    <div id="error-banner" class="error-banner hidden">
+      <i class="fa-solid fa-triangle-exclamation"></i>
+      <span id="error-message">Unable to fetch media stream.</span>
+    </div>
+
+    <!-- Media Analysis & Download Options Card (Hidden by Default) -->
+    <section id="media-card-section" class="media-card-section hidden">
+      <div class="media-card">
+        <div class="media-preview-col">
+          <div class="thumbnail-wrapper">
+            <img id="media-thumb" src="" alt="Thumbnail preview">
+            <div id="media-duration" class="duration-tag">00:00</div>
+            <div id="media-platform-badge" class="platform-badge">YouTube</div>
+          </div>
+        </div>
+
+        <div class="media-info-col">
+          <h2 id="media-title" class="media-title">Media Title</h2>
+          <div class="media-uploader-row">
+            <span id="media-uploader" class="uploader-name">Creator</span>
+            <span class="dot-separator">•</span>
+            <span id="media-resolution-tag" class="quality-badge">1080p HD</span>
+          </div>
+
+          <div class="options-container">
+            <!-- Format Mode Selector (Video vs Audio) -->
+            <div class="option-group">
+              <label class="option-label"><i class="fa-solid fa-sliders"></i> Download Mode</label>
+              <div class="mode-toggle-group">
+                <button type="button" class="mode-btn active" data-mode="video">
+                  <i class="fa-solid fa-video"></i> Video (MP4)
+                </button>
+                <button type="button" class="mode-btn" data-mode="audio">
+                  <i class="fa-solid fa-music"></i> Audio (MP3)
+                </button>
+              </div>
+            </div>
+
+            <!-- Quality Picker -->
+            <div class="option-group" id="quality-selector-group">
+              <label class="option-label"><i class="fa-solid fa-gear"></i> Stream Quality</label>
+              <select id="quality-select" class="custom-select">
+                <option value="1080">1080p (Full HD 60fps)</option>
+                <option value="720">720p (HD)</option>
+                <option value="480">480p (Standard)</option>
+                <option value="360">360p (Mobile)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Download Trigger Button -->
+          <button id="download-action-btn" class="btn-download">
+            <i class="fa-solid fa-download"></i>
+            <span id="download-btn-text">Download MP4 Video</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Live Download Progress & Finished Card -->
+    <section id="download-progress-section" class="download-progress-section hidden">
+      <!-- Active Progress View -->
+      <div id="progress-active-view" class="progress-card">
+        <div class="progress-header">
+          <div class="progress-title-group">
+            <div class="spinner-ring"></div>
+            <div>
+              <h3 id="progress-filename" class="progress-filename">Downloading stream...</h3>
+              <p id="progress-status-text" class="progress-status">Fetching chunks from CDN...</p>
+            </div>
+          </div>
+          <span id="progress-percent" class="progress-percent">0%</span>
+        </div>
+
+        <div class="progress-bar-track">
+          <div id="progress-bar-fill" class="progress-bar-fill"></div>
+        </div>
+
+        <div class="progress-stats-row">
+          <span id="progress-bytes"><i class="fa-solid fa-hard-drive"></i> 0 MB / 0 MB</span>
+          <span id="progress-speed"><i class="fa-solid fa-gauge-high"></i> 0.0 MB/s</span>
+          <span id="progress-eta"><i class="fa-regular fa-clock"></i> ETA --:--</span>
+        </div>
+      </div>
+
+      <!-- 100% Complete Success View -->
+      <div id="progress-success-view" class="progress-card success-card hidden">
+        <div class="success-header">
+          <div class="success-icon-badge">
+            <i class="fa-solid fa-circle-check"></i>
+          </div>
+          <div class="success-text-group">
+            <div class="success-badge-pill"><i class="fa-solid fa-sparkles"></i> 100% FINISHED</div>
+            <h3 id="success-filename" class="success-title">Video_Media.mp3</h3>
+            <p class="success-subtitle"><i class="fa-solid fa-folder-arrow-down"></i> Successfully saved to your <strong>Downloads</strong> folder</p>
+          </div>
+        </div>
+
+        <!-- Download Metrics Summary -->
+        <div class="success-metrics-grid">
+          <div class="metric-item">
+            <span class="metric-label"><i class="fa-solid fa-hard-drive"></i> File Size</span>
+            <span id="success-size" class="metric-val">14.2 MB</span>
+          </div>
+          <div class="metric-item">
+            <span class="metric-label"><i class="fa-solid fa-bolt"></i> Average Speed</span>
+            <span id="success-speed" class="metric-val">8.4 MB/s</span>
+          </div>
+          <div class="metric-item">
+            <span class="metric-label"><i class="fa-regular fa-clock"></i> Time Taken</span>
+            <span id="success-time" class="metric-val">1.7s</span>
+          </div>
+          <div class="metric-item">
+            <span class="metric-label"><i class="fa-solid fa-layer-group"></i> Format</span>
+            <span id="success-format" class="metric-val">MP3 320k</span>
+          </div>
+        </div>
+
+        <!-- Success Actions -->
+        <div class="success-actions-row">
+          <button type="button" id="btn-redownload" class="btn-action-outline">
+            <i class="fa-solid fa-arrow-rotate-right"></i> Save Copy Again
+          </button>
+          <button type="button" id="btn-download-another" class="btn-action-primary">
+            <i class="fa-solid fa-plus"></i> Download Another Link
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Bento Grid Features -->
+    <section class="features-section">
+      <div class="section-header">
+        <span class="section-chip">Engine Capabilities</span>
+        <h2 class="section-title">Built for Speed, Quality & Simplicity</h2>
+      </div>
+
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon"><i class="fa-solid fa-bolt-lightning"></i></div>
+          <h3>Direct CDN Streaming</h3>
+          <p>Bypasses server bottlenecks by streaming video chunks straight to your browser with full bandwidth utilization.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon"><i class="fa-solid fa-compact-disc"></i></div>
+          <h3>Lossless 320kbps MP3</h3>
+          <p>Extract crystal-clear audio from music videos, podcasts, and sound clips with rich acoustic fidelity.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon"><i class="fa-solid fa-ban"></i></div>
+          <h3>Zero Watermarks</h3>
+          <p>Get pristine, unbranded TikTok videos and Instagram Reels ready for high-definition sharing.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon"><i class="fa-solid fa-mobile-screen"></i></div>
+          <h3>Installable PWA</h3>
+          <p>Add UniDownloader to your Android or iPhone home screen with 0 MB storage overhead.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon"><i class="fa-solid fa-infinity"></i></div>
+          <h3>100% Free & Unlimited</h3>
+          <p>No subscriptions, no rate limits, and no account registrations required. Simply paste and download.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon"><i class="fa-solid fa-shield-halved"></i></div>
+          <h3>Private & Secure</h3>
+          <p>Downloads are processed on-the-fly. We never log your search history or retain personal files.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Recent Downloads History Section -->
+    <section class="history-section">
+      <div class="section-header">
+        <div class="history-title-row">
+          <div>
+            <span class="section-chip">Local Library</span>
+            <h2 class="section-title">Recent Downloads</h2>
+          </div>
+          <button id="clear-history-btn" class="btn-secondary">
+            <i class="fa-solid fa-trash"></i> Clear History
+          </button>
+        </div>
+      </div>
+
+      <div id="history-container" class="history-container">
+        <!-- History Items Inserted Dynamically -->
+        <div class="history-empty">
+          <i class="fa-regular fa-folder-open"></i>
+          <p>No recent downloads yet. Paste a link above to get started!</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- FAQ Section -->
+    <section class="faq-section">
+      <div class="section-header">
+        <span class="section-chip">Got Questions?</span>
+        <h2 class="section-title">Frequently Asked Questions</h2>
+      </div>
+
+      <div class="faq-accordion">
+        <details class="faq-item">
+          <summary>How do I download Instagram Reels or Stories?</summary>
+          <div class="faq-content">
+            Copy the Instagram Reel link from the Instagram app or web browser (e.g. <code>https://www.instagram.com/reel/...</code>), paste it into the search box above, and click <strong>ANALYZE LINK</strong>. Select MP4 video or MP3 audio and click Download.
+          </div>
+        </details>
+
+        <details class="faq-item">
+          <summary>Can I download TikTok videos without the watermark?</summary>
+          <div class="faq-content">
+            Yes! UniDownloader automatically detects TikTok URLs and strips the floating watermark for a clean HD video file.
+          </div>
+        </details>
+
+        <details class="faq-item">
+          <summary>Where are my downloaded files saved?</summary>
+          <div class="faq-content">
+            Files are saved directly to your device's default <strong>Downloads</strong> folder (on Android, iOS, Windows, Mac, or Linux).
+          </div>
+        </details>
+
+        <details class="faq-item">
+          <summary>How do I install UniDownloader on my phone?</summary>
+          <div class="faq-content">
+            Open this page in Chrome or Safari on your phone and tap <strong>Install App</strong> or choose <strong>"Add to Home Screen"</strong> in your browser menu.
+          </div>
+        </details>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container footer-content">
+      <div class="footer-brand">
+        <div class="logo-group">
+          <div class="logo-icon small"><i class="fa-solid fa-cloud-arrow-down"></i></div>
+          <span class="logo-title">UniDownloader</span>
+        </div>
+        <p class="footer-tagline">High-Speed Universal Media Downloader SaaS</p>
+      </div>
+
+      <div class="footer-credits">
+        <div class="vibe-coded-badge">
+          <i class="fa-solid fa-heart"></i>
+          <span>Vibe coded by <strong>Khayal and Antigravity</strong></span>
+        </div>
+        <p class="copyright">© 2026 UniDownloader. Personal use personal media utility.</p>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Server Configuration Modal for Android / Local Network -->
+  <div id="server-modal" class="modal-backdrop hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <i class="fa-solid fa-server modal-icon"></i>
+          <h3>Backend Server Connection</h3>
+        </div>
+        <button id="modal-close-btn" class="modal-close"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <p class="modal-desc">
+        When running as an Android APK, connect to your PC's IP address (e.g. <code>http://192.168.1.5:3000</code>) or cloud server.
+      </p>
+
+      <div class="modal-input-group">
+        <label for="server-url-input">Server API URL</label>
+        <input type="text" id="server-url-input" class="modal-input" placeholder="http://192.168.1.X:3000" />
+      </div>
+
+      <div class="modal-actions">
+        <button id="btn-save-server" class="btn-action-primary">Save & Connect</button>
+        <button id="btn-reset-server" class="btn-action-outline">Reset to Default</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="toast hidden">
+    <i class="fa-solid fa-circle-check"></i>
+    <span id="toast-message">Notification message</span>
+  </div>
+
+  <!-- Scripts -->
+  <script src="/app.js"></script>
+</body>
+</html>
