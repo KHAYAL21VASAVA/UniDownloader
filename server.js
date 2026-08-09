@@ -7,8 +7,10 @@ const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
 const path = require('path');
-const { execFile } = require('child_process');
+const { execFile, execSync } = require('child_process');
 const fs = require('fs');
+const os = require('os');
+const ytdl = require('@distube/ytdl-core');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -17,16 +19,50 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-const YTDLP_PATH = path.join(__dirname, 'bin', 'yt-dlp.exe');
+// Cross-Platform Binary Path Detection
+const isWin = process.platform === 'win32';
+const binDir = path.join(__dirname, 'bin');
+const binaryName = isWin ? 'yt-dlp.exe' : 'yt-dlp';
+let YTDLP_PATH = path.join(binDir, binaryName);
+
+// Check if yt-dlp is available in bin/ or globally on system
+function checkAndSetupBinary() {
+  if (fs.existsSync(YTDLP_PATH)) {
+    if (!isWin) {
+      try { fs.chmodSync(YTDLP_PATH, 0o755); } catch (e) {}
+    }
+    return;
+  }
+
+  // Check system PATH
+  try {
+    const whichCmd = isWin ? 'where yt-dlp' : 'which yt-dlp';
+    const sysPath = execSync(whichCmd, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    if (sysPath && fs.existsSync(sysPath)) {
+      YTDLP_PATH = sysPath.split('\n')[0].trim();
+      console.log(`[UniDownloader] Using system yt-dlp at: ${YTDLP_PATH}`);
+      return;
+    }
+  } catch (e) {}
+
+  // Trigger background download of binary if missing
+  try {
+    require('./postinstall');
+  } catch (e) {
+    console.log('[UniDownloader Note] Postinstall script note:', e.message);
+  }
+}
+checkAndSetupBinary();
+
 const DESKTOP_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
 
-// In-memory stream resolver cache (TTL: 10 minutes)
+// In-memory stream resolver cache (TTL: 15 minutes)
 const streamCache = new Map();
 
 function cleanCache() {
   const now = Date.now();
   for (const [key, val] of streamCache.entries()) {
-    if (now - val.timestamp > 10 * 60 * 1000) {
+    if (now - val.timestamp > 15 * 60 * 1000) {
       streamCache.delete(key);
     }
   }
@@ -39,9 +75,9 @@ setInterval(cleanCache, 60 * 1000);
 function runYtDlp(args) {
   return new Promise((resolve, reject) => {
     if (!fs.existsSync(YTDLP_PATH)) {
-      return reject(new Error('yt-dlp binary not found'));
+      return reject(new Error(`yt-dlp binary not found at ${YTDLP_PATH}`));
     }
-    execFile(YTDLP_PATH, args, { maxBuffer: 1024 * 1024 * 30, timeout: 30000 }, (error, stdout, stderr) => {
+    execFile(YTDLP_PATH, args, { maxBuffer: 1024 * 1024 * 30, timeout: 35000 }, (error, stdout, stderr) => {
       if (error) {
         return reject(new Error(stderr || error.message));
       }
@@ -76,7 +112,165 @@ function sanitizeFileName(name) {
 }
 
 /**
- * Resolver: Multi-Engine Media Analysis with Pre-Cached CDN URLs
+ * Pure JS YouTube Resolver (Fallback if yt-dlp is initializing)
+ */
+async function extractYouTubeJS(url) {
+  try {
+    const info = await ytdl.getInfo(url);
+    const title = sanitizeFileName(info.videoDetails.title || 'YouTube Video');
+    const uploader = info.videoDetails.author?.name || 'YouTube Creator';
+    const duration = parseInt(info.videoDetails.lengthSeconds || '0', 10);
+    const thumbs = info.videoDetails.thumbnails || [];
+    const thumbnail = thumbs.length > 0 ? thumbs[thumbs.length - 1].url : null;
+
+    const audioFormat = ytdl.chooseFormat(info.formats, { quality: 'highestaudio' }) || info.formats.find(f => f.hasAudio);
+    const videoFormat = ytdl.chooseFormat(info.formats, { quality: 'highest' }) || info.formats.find(f => f.hasVideo && f.hasAudio);
+
+    const videoUrl = videoFormat?.url || url;
+    const audioUrl = audioFormat?.url || videoUrl;
+
+    return {
+      title,
+      uploader,
+      thumbnail,
+      platform: 'YouTube',
+      duration,
+      videoUrl,
+      audioUrl,
+      formats: [
+        { quality: '1080p (Full HD)', format: 'MP4', url: videoUrl, isVideo: true },
+        { quality: '720p (HD)', format: 'MP4', url: videoUrl, isVideo: true },
+        { quality: '480p (SD)', format: 'MP4', url: videoUrl, isVideo: true },
+        { quality: '320 kbps Lossless', format: 'MP3', url: audioUrl, isVideo: false }
+      ]
+    };
+  } catch (e) {
+    console.log('[YouTube JS Extractor Note]', e.message);
+    return null;
+  }
+}
+
+/**
+ * Enhanced Instagram Video Scraper (Embed & GraphQL)
+ */
+async function extractInstagram(url) {
+  const shortcodeMatch = url.match(/\/(?:reel|p|reels)\/([A-Za-z0-9_-]+)/i);
+  const shortcode = shortcodeMatch ? shortcodeMatch[1] : null;
+
+  try {
+    const embedUrl = shortcode
+      ? `https://www.instagram.com/p/${shortcode}/embed/captioned/`
+      : `${url.replace(/\/$/, '')}/embed/captioned/`;
+
+    const response = await axios.get(embedUrl, {
+      headers: {
+        'User-Agent': DESKTOP_USER_AGENT,
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9'
+      },
+      timeout: 9000
+    });
+
+    const html = response.data;
+    if (html && typeof html === 'string') {
+      let videoCdnUrl = null;
+      const patterns = [
+        /video_url\\?":\\?"(https:[^"\\]+)/i,
+        /"video_url":"(https:[^"]+)"/i,
+        /src=\\?"(https:\/\/[^"\\]+scontent[^"\\]+\.mp4[^"\\]*)/i,
+        /"src":"(https:\/\/[^"]+scontent[^"]+\.mp4[^"]*)"/i
+      ];
+
+      for (const p of patterns) {
+        const match = html.match(p);
+        if (match && match[1]) {
+          const clean = match[1].replace(/\\u0026/g, '&').replace(/\\\//g, '/').replace(/&amp;/g, '&');
+          if (clean.includes('.mp4') || clean.includes('scontent')) {
+            videoCdnUrl = clean;
+            break;
+          }
+        }
+      }
+
+      let thumbnail = null;
+      const thumbMatch = html.match(/display_url\\?":\\?"(https:[^"\\]+)/i) ||
+                         html.match(/img class="EmbeddedMediaImage"[^>]*src="([^"]+)"/i);
+      if (thumbMatch && thumbMatch[1]) {
+        thumbnail = thumbMatch[1].replace(/\\u0026/g, '&').replace(/\\\//g, '/').replace(/&amp;/g, '&');
+      }
+
+      let title = shortcode ? `Instagram_Reel_${shortcode}` : 'Instagram_Media';
+      const captionMatch = html.match(/<div class="Caption"[^>]*>.*?<span[^>]*>(.*?)<\/span>/is);
+      if (captionMatch && captionMatch[1]) {
+        const raw = captionMatch[1].replace(/<[^>]+>/g, '').trim();
+        if (raw) title = sanitizeFileName(raw.slice(0, 60));
+      }
+
+      if (videoCdnUrl) {
+        return {
+          title,
+          uploader: 'Instagram Creator',
+          thumbnail,
+          platform: 'Instagram',
+          duration: 0,
+          videoUrl: videoCdnUrl,
+          audioUrl: videoCdnUrl,
+          formats: [
+            { quality: 'HD Video (with Audio)', format: 'MP4', url: videoCdnUrl, isVideo: true },
+            { quality: 'Audio MP3', format: 'MP3', url: videoCdnUrl, isVideo: false }
+          ]
+        };
+      }
+    }
+  } catch (e) {
+    console.log('[Instagram Scraper Note]', e.message);
+  }
+
+  return null;
+}
+
+/**
+ * TikTok Resolver via TikWM API
+ */
+async function extractTikTok(url) {
+  try {
+    const response = await axios.get(`https://www.tikwm.com/api/?url=${encodeURIComponent(url)}`, {
+      headers: { 'User-Agent': DESKTOP_USER_AGENT },
+      timeout: 8000
+    });
+    if (response.data && response.data.data) {
+      const d = response.data.data;
+      const title = sanitizeFileName(d.title || `TikTok_Video_${d.id || Date.now()}`);
+      const author = (d.author && d.author.nickname) || 'TikTok Creator';
+      const thumbnail = d.cover || d.origin_cover || null;
+      const duration = d.duration || 0;
+      const videoUrl = d.play || d.wmplay || null;
+      const musicUrl = d.music || videoUrl;
+
+      if (videoUrl) {
+        return {
+          title,
+          uploader: author,
+          thumbnail,
+          platform: 'TikTok',
+          duration,
+          videoUrl,
+          audioUrl: musicUrl,
+          formats: [
+            { quality: 'HD No Watermark', format: 'MP4', url: videoUrl, isVideo: true },
+            { quality: 'Original Sound', format: 'MP3', url: musicUrl, isVideo: false }
+          ]
+        };
+      }
+    }
+  } catch (e) {
+    console.log('[TikWM Note]', e.message);
+  }
+  return null;
+}
+
+/**
+ * Main Media Analysis Function
  */
 async function analyzeMedia(url) {
   const platform = detectPlatform(url);
@@ -91,12 +285,10 @@ async function analyzeMedia(url) {
     const thumbnail = d.thumbnail || (d.thumbnails && d.thumbnails.length > 0 ? d.thumbnails[d.thumbnails.length - 1].url : null);
     const duration = Math.round(d.duration || 0);
 
-    // Extract best video stream and audio stream CDN URLs directly from formats
     let bestVideoUrl = d.url || url;
     let bestAudioUrl = d.url || url;
 
     if (d.formats && Array.isArray(d.formats)) {
-      // Find direct progressive video format (with video + audio) or best video format
       const progressiveVideo = d.formats.filter(f => f.url && f.vcodec !== 'none' && f.acodec !== 'none').pop();
       if (progressiveVideo) {
         bestVideoUrl = progressiveVideo.url;
@@ -105,20 +297,11 @@ async function analyzeMedia(url) {
         if (anyVideo) bestVideoUrl = anyVideo.url;
       }
 
-      // Find best audio format
       const bestAudio = d.formats.filter(f => f.url && f.acodec !== 'none').pop();
-      if (bestAudio) {
-        bestAudioUrl = bestAudio.url;
-      }
+      if (bestAudio) bestAudioUrl = bestAudio.url;
     }
 
-    // Cache pre-resolved CDN URLs
-    streamCache.set(cacheKey, {
-      videoUrl: bestVideoUrl,
-      audioUrl: bestAudioUrl,
-      title,
-      timestamp: Date.now()
-    });
+    streamCache.set(cacheKey, { videoUrl: bestVideoUrl, audioUrl: bestAudioUrl, title, timestamp: Date.now() });
 
     return {
       streamId: cacheKey,
@@ -140,165 +323,32 @@ async function analyzeMedia(url) {
     console.log('[Native YtDlp Note]', err.message);
   }
 
-  // 2. Specific Fallback for TikTok
+  // 2. Specific Platform Fallbacks
   if (platform === 'TikTok') {
-    try {
-      const response = await axios.get(`https://www.tikwm.com/api/?url=${encodeURIComponent(url)}`, {
-        headers: { 'User-Agent': DESKTOP_USER_AGENT },
-        timeout: 8000
-      });
-      if (response.data && response.data.data) {
-        const d = response.data.data;
-        const title = sanitizeFileName(d.title || `TikTok_Video_${d.id || Date.now()}`);
-        const author = (d.author && d.author.nickname) || 'TikTok Creator';
-        const thumbnail = d.cover || d.origin_cover || null;
-        const duration = d.duration || 0;
-        const videoUrl = d.play || d.wmplay || url;
-        const musicUrl = d.music || videoUrl;
-
-        streamCache.set(cacheKey, { videoUrl, audioUrl: musicUrl, title, timestamp: Date.now() });
-
-        return {
-          streamId: cacheKey,
-          title,
-          uploader: author,
-          thumbnail,
-          platform: 'TikTok',
-          duration,
-          videoUrl,
-          audioUrl: musicUrl,
-          formats: [
-            { quality: 'HD No Watermark', format: 'MP4', url: videoUrl, isVideo: true },
-            { quality: 'Original Sound', format: 'MP3', url: musicUrl, isVideo: false }
-          ]
-        };
-      }
-    } catch (e) {
-      console.log('[TikWM Fallback Note]', e.message);
+    const res = await extractTikTok(url);
+    if (res) {
+      streamCache.set(cacheKey, { videoUrl: res.videoUrl, audioUrl: res.audioUrl, title: res.title, timestamp: Date.now() });
+      return { streamId: cacheKey, ...res };
     }
   }
 
-  // 3. Fallback: Instagram Scraper
   if (platform === 'Instagram') {
-    const shortcodeMatch = url.match(/\/(?:reel|p|reels)\/([A-Za-z0-9_-]+)/i);
-    const shortcode = shortcodeMatch ? shortcodeMatch[1] : null;
-    try {
-      const embedUrl = shortcode
-        ? `https://www.instagram.com/p/${shortcode}/embed/captioned/`
-        : `${url.replace(/\/$/, '')}/embed/captioned/`;
-
-      const response = await axios.get(embedUrl, {
-        headers: { 'User-Agent': DESKTOP_USER_AGENT },
-        timeout: 8000
-      });
-
-      const html = response.data;
-      if (html && !html.includes('Login • Instagram')) {
-        let videoCdnUrl = null;
-        const patterns = [
-          /video_url\\?":\\?"(https:[^"\\]+)/i,
-          /"video_url":"(https:[^"]+)"/i,
-          /src=\\?"(https:\/\/[^"\\]+scontent[^"\\]+\.mp4[^"\\]*)/i
-        ];
-        for (const p of patterns) {
-          const match = html.match(p);
-          if (match && match[1]) {
-            videoCdnUrl = match[1].replace(/\\u0026/g, '&').replace(/\\\//g, '/').replace(/&amp;/g, '&');
-            break;
-          }
-        }
-
-        let thumbnail = null;
-        const thumbMatch = html.match(/display_url\\?":\\?"(https:[^"\\]+)/i);
-        if (thumbMatch && thumbMatch[1]) {
-          thumbnail = thumbMatch[1].replace(/\\u0026/g, '&').replace(/\\\//g, '/').replace(/&amp;/g, '&');
-        }
-
-        let title = shortcode ? `Instagram_Reel_${shortcode}` : 'Instagram_Media';
-        const captionMatch = html.match(/<div class="Caption"[^>]*>.*?<span[^>]*>(.*?)<\/span>/is);
-        if (captionMatch && captionMatch[1]) {
-          const raw = captionMatch[1].replace(/<[^>]+>/g, '').trim();
-          if (raw) title = sanitizeFileName(raw.slice(0, 60));
-        }
-
-        if (videoCdnUrl) {
-          streamCache.set(cacheKey, { videoUrl: videoCdnUrl, audioUrl: videoCdnUrl, title, timestamp: Date.now() });
-
-          return {
-            streamId: cacheKey,
-            title,
-            uploader: 'Instagram Creator',
-            thumbnail,
-            platform: 'Instagram',
-            duration: 0,
-            videoUrl: videoCdnUrl,
-            audioUrl: videoCdnUrl,
-            formats: [
-              { quality: 'HD Video', format: 'MP4', url: videoCdnUrl, isVideo: true },
-              { quality: 'Audio MP3', format: 'MP3', url: videoCdnUrl, isVideo: false }
-            ]
-          };
-        }
-      }
-    } catch (e) {
-      console.log('[Instagram Embed Note]', e.message);
+    const res = await extractInstagram(url);
+    if (res) {
+      streamCache.set(cacheKey, { videoUrl: res.videoUrl, audioUrl: res.audioUrl, title: res.title, timestamp: Date.now() });
+      return { streamId: cacheKey, ...res };
     }
   }
 
-  // 4. Fallback: OpenGraph Tag Scraper
-  try {
-    const response = await axios.get(url, {
-      headers: { 'User-Agent': DESKTOP_USER_AGENT },
-      timeout: 8000
-    });
-    const html = response.data;
-    if (typeof html === 'string') {
-      let title = `${platform}_Media`;
-      let thumbnail = null;
-
-      const ogTitle = html.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i);
-      const titleTag = html.match(/<title>([^<]+)<\/title>/i);
-      if (ogTitle && ogTitle[1]) title = sanitizeFileName(ogTitle[1]);
-      else if (titleTag && titleTag[1]) title = sanitizeFileName(titleTag[1]);
-
-      const ogImage = html.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i);
-      if (ogImage && ogImage[1]) thumbnail = ogImage[1];
-
-      streamCache.set(cacheKey, { videoUrl: url, audioUrl: url, title, timestamp: Date.now() });
-
-      return {
-        streamId: cacheKey,
-        title,
-        uploader: platform,
-        thumbnail,
-        platform,
-        duration: 0,
-        videoUrl: url,
-        audioUrl: url,
-        formats: [
-          { quality: '1080p (Full HD)', format: 'MP4', url, isVideo: true },
-          { quality: '320 kbps Lossless', format: 'MP3', url, isVideo: false }
-        ]
-      };
+  if (platform === 'YouTube') {
+    const res = await extractYouTubeJS(url);
+    if (res) {
+      streamCache.set(cacheKey, { videoUrl: res.videoUrl, audioUrl: res.audioUrl, title: res.title, timestamp: Date.now() });
+      return { streamId: cacheKey, ...res };
     }
-  } catch (err) {
-    console.log('[OpenGraph Note]', err.message);
   }
 
-  return {
-    streamId: cacheKey,
-    title: `${platform}_Media`,
-    uploader: platform,
-    thumbnail: null,
-    platform,
-    duration: 0,
-    videoUrl: url,
-    audioUrl: url,
-    formats: [
-      { quality: '1080p (Full HD)', format: 'MP4', url, isVideo: true },
-      { quality: '320 kbps Lossless', format: 'MP3', url, isVideo: false }
-    ]
-  };
+  return null;
 }
 
 // -------------------------------------------------------------
@@ -313,6 +363,8 @@ app.get('/api/health', (req, res) => {
     status: 'online',
     app: 'UniDownloader Web SaaS',
     version: '1.0.0',
+    platform: process.platform,
+    binaryExists: fs.existsSync(YTDLP_PATH),
     credits: 'Vibe coded by Khayal and Antigravity',
     timestamp: new Date().toISOString()
   });
@@ -334,7 +386,7 @@ app.post('/api/analyze', async (req, res) => {
     if (!result || !result.formats || result.formats.length === 0) {
       return res.status(422).json({
         success: false,
-        error: 'Unable to analyze media streams for this link. Please check if the link is public.'
+        error: 'Unable to extract video streams from this link. Please check if the video is public.'
       });
     }
 
@@ -346,7 +398,7 @@ app.post('/api/analyze', async (req, res) => {
 });
 
 /**
- * High-Speed Direct Stream Pipe
+ * Direct High-Speed Stream Pipe with Strict HTML Protection
  */
 app.get('/api/stream', async (req, res) => {
   const streamUrl = req.query.url;
@@ -364,17 +416,18 @@ app.get('/api/stream', async (req, res) => {
 
   let directCdnUrl = streamUrl;
 
-  // 1. Check in-memory stream cache for 0ms startup time
+  // 1. Check in-memory stream cache
   if (streamId && streamCache.has(streamId)) {
     const cached = streamCache.get(streamId);
     directCdnUrl = format === 'mp3' ? cached.audioUrl : cached.videoUrl;
   }
 
-  // 2. If URL is a webpage and not yet a direct CDN stream, resolve it
+  // 2. If URL is a webpage and not yet a direct CDN stream, resolve it via yt-dlp
   const isDirectCdn = directCdnUrl && (
     directCdnUrl.includes('googlevideo.com') ||
     directCdnUrl.includes('scontent') ||
     directCdnUrl.includes('tiktokcdn') ||
+    directCdnUrl.includes('tikwm') ||
     directCdnUrl.includes('.mp4') ||
     directCdnUrl.includes('.mp3')
   );
@@ -391,7 +444,7 @@ app.get('/api/stream', async (req, res) => {
     }
   }
 
-  // 3. High-Performance Chunk Streaming via Axios with Keep-Alive & High Buffer
+  // 3. High-Performance Chunk Streaming via Axios
   try {
     const streamResponse = await axios({
       method: 'GET',
@@ -406,6 +459,14 @@ app.get('/api/stream', async (req, res) => {
       timeout: 35000
     });
 
+    const upstreamType = streamResponse.headers['content-type'] || '';
+
+    // STRICT HTML CHECK: Never send HTML as a video/audio file!
+    if (upstreamType.includes('text/html')) {
+      console.error('[Stream Error] Upstream returned HTML instead of binary media.');
+      return res.status(422).send('Error: Upstream media stream expired or protected. Please re-analyze the link.');
+    }
+
     const contentType = format === 'mp3' ? 'audio/mpeg' : (format === 'm4a' ? 'audio/mp4' : 'video/mp4');
 
     res.setHeader('Content-Disposition', `attachment; filename="${asciiFilename}"; filename*=UTF-8''${encodedFilename}`);
@@ -414,7 +475,6 @@ app.get('/api/stream', async (req, res) => {
       res.setHeader('Content-Length', streamResponse.headers['content-length']);
     }
 
-    // Set high-water-mark chunk buffer
     streamResponse.data.pipe(res);
   } catch (err) {
     console.error('[Direct Stream Pipe Error]', err.message);
@@ -426,8 +486,6 @@ app.get('/api/stream', async (req, res) => {
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
-
-const os = require('os');
 
 function getLocalIp() {
   const nets = os.networkInterfaces();
