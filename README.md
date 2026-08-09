@@ -123,7 +123,7 @@ UniDownloader/
 
 1. Open **Android Studio**.
 2. Select **Open** and navigate to:
-   `C:\Users\KHAYAL VASAVA\.gemini\antigravity\scratch\UniDownloader`
+   `path/../../../../UniDownloader`
 3. Allow Gradle to sync dependencies.
 4. Select a connected device or Android Virtual Device (AVD).
 5. Click **Run 'app'** (`Shift + F10`) to build and deploy the APK.
