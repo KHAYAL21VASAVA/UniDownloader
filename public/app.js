@@ -167,18 +167,88 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // -------------------------------------------------------------
+  // Strict URL & Media Link Validation Helper
+  // -------------------------------------------------------------
+  function validateMediaUrl(url) {
+    if (!url || typeof url !== 'string') {
+      return { valid: false, message: 'Please paste or enter a video or audio link.' };
+    }
+
+    const clean = url.trim();
+    if (!clean.startsWith('http://') && !clean.startsWith('https://')) {
+      return { valid: false, message: 'Please enter a complete URL starting with https://' };
+    }
+
+    try {
+      const parsed = new URL(clean);
+      const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
+      const path = parsed.pathname.toLowerCase();
+
+      // Detect generic root homepage URLs
+      if ((path === '' || path === '/') && !parsed.search) {
+        return {
+          valid: false,
+          message: `"${host}" is a homepage link. Please provide a direct link to a specific video, reel, or post (e.g. ${host}/reel/... or ${host}/watch?v=...)`
+        };
+      }
+
+      // Check Instagram homepage/profile
+      if (host.includes('instagram.com')) {
+        if (!path.includes('/p/') && !path.includes('/reel/') && !path.includes('/reels/') && !path.includes('/tv/') && !path.includes('/stories/')) {
+          return {
+            valid: false,
+            message: 'Please provide a direct Instagram Reel, Post, or Video link (e.g. instagram.com/reel/C_XvK8_...)'
+          };
+        }
+      }
+
+      // Check YouTube homepage/channel without video
+      if (host.includes('youtube.com') || host.includes('youtu.be')) {
+        if (!path.includes('/watch') && !path.includes('/shorts') && !path.includes('/live') && !path.includes('/embed') && !host.includes('youtu.be') && !parsed.searchParams.get('v')) {
+          return {
+            valid: false,
+            message: 'Please provide a direct YouTube video link (e.g. youtube.com/watch?v=... or youtu.be/...)'
+          };
+        }
+      }
+
+      // Check TikTok root
+      if (host.includes('tiktok.com')) {
+        if (!path.includes('/video/') && !path.includes('/v/') && !path.includes('/t/') && !host.startsWith('vt.') && !host.startsWith('vm.')) {
+          return {
+            valid: false,
+            message: 'Please provide a direct TikTok video link (e.g. tiktok.com/@user/video/... or vt.tiktok.com/...)'
+          };
+        }
+      }
+
+      // Check Twitter/X root
+      if (host.includes('twitter.com') || host.includes('x.com')) {
+        if (!path.includes('/status/')) {
+          return {
+            valid: false,
+            message: 'Please provide a direct Tweet/Post link containing media (e.g. x.com/user/status/...)'
+          };
+        }
+      }
+
+      return { valid: true };
+    } catch (e) {
+      return { valid: false, message: 'Invalid URL format. Please check the link and try again.' };
+    }
+  }
+
+  // -------------------------------------------------------------
   // Media Analysis Pipeline
   // -------------------------------------------------------------
   async function triggerAnalysis() {
     const rawUrl = urlInput.value.trim();
-    if (!rawUrl) {
-      showError('Please paste or enter a valid media link first.');
+    
+    // Strict URL Check
+    const validation = validateMediaUrl(rawUrl);
+    if (!validation.valid) {
+      showError(validation.message);
       urlInput.focus();
-      return;
-    }
-
-    if (!rawUrl.startsWith('http://') && !rawUrl.startsWith('https://')) {
-      showError('Please enter a complete URL starting with http:// or https://');
       return;
     }
 

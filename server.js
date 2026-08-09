@@ -381,6 +381,37 @@ app.post('/api/analyze', async (req, res) => {
 
   const cleanUrl = url.trim();
 
+  // Strict Media URL Validation
+  try {
+    const parsed = new URL(cleanUrl);
+    const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
+    const path = parsed.pathname.toLowerCase();
+
+    // Check root homepages
+    if ((path === '' || path === '/') && !parsed.search) {
+      return res.status(400).json({
+        success: false,
+        error: `"${host}" is a homepage link. Please provide a direct link to a video, reel, post, or audio track (e.g. ${host}/reel/... or ${host}/watch?v=...)`
+      });
+    }
+
+    if (host.includes('instagram.com') && !path.includes('/p/') && !path.includes('/reel/') && !path.includes('/reels/') && !path.includes('/tv/') && !path.includes('/stories/')) {
+      return res.status(400).json({
+        success: false,
+        error: 'Please provide a direct Instagram Reel, Post, or Video link (e.g. instagram.com/reel/C_XvK8_...)'
+      });
+    }
+
+    if ((host.includes('youtube.com') || host.includes('youtu.be')) && !path.includes('/watch') && !path.includes('/shorts') && !path.includes('/live') && !path.includes('/embed') && !host.includes('youtu.be') && !parsed.searchParams.get('v')) {
+      return res.status(400).json({
+        success: false,
+        error: 'Please provide a direct YouTube video link (e.g. youtube.com/watch?v=... or youtu.be/...)'
+      });
+    }
+  } catch (e) {
+    return res.status(400).json({ success: false, error: 'Invalid URL structure' });
+  }
+
   try {
     const result = await analyzeMedia(cleanUrl);
     if (!result || !result.formats || result.formats.length === 0) {
