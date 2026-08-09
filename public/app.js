@@ -232,7 +232,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     } catch (err) {
       console.error('[Analyze Error]', err);
-      showError(err.message || 'Unable to fetch video details. Please ensure the link is public.');
+      if (window.location.hostname.includes('github.io')) {
+        showError('⚠️ GitHub Pages is a static host without Node.js backend. Please deploy your repository to Render.com (Free 1-Click) to run the full download engine!');
+      } else {
+        showError(err.message || 'Unable to fetch video details. Please ensure the link is public.');
+      }
     } finally {
       setAnalyzingState(false);
     }
